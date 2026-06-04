@@ -1,6 +1,36 @@
 # squad-ts
 
-A comprehensive TypeScript SDK for the [Squad payment gateway](https://squadco.com) — fully typed, dual ESM/CJS, and covering every documented API endpoint.
+A comprehensive TypeScript SDK for the [Squad payment gateway](https://squadco.com) — fully typed, zero dependencies, dual ESM/CJS, and covering every documented API endpoint.
+
+[![npm version](https://img.shields.io/npm/v/squad-ts)](https://www.npmjs.com/package/squad-ts)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+
+---
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [API Reference](#api-reference)
+  - [Payments](#squadpayments)
+  - [Transfers](#squadtransfers)
+  - [Virtual Accounts](#squadvirtualaccounts)
+  - [Recurring Payments](#squadrecurring)
+  - [Refunds](#squadrefunds)
+  - [Disputes](#squaddisputes)
+  - [Value-Added Services](#squadvas)
+  - [Payment Links](#squadpaymentlinks)
+  - [Webhooks](#squadwebhooks)
+- [Error Handling](#error-handling)
+- [TypeScript Usage](#typescript-usage)
+- [Environment Variables](#environment-variables)
+- [Key Business Rules](#key-business-rules)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
 
 ## Installation
 
@@ -11,6 +41,8 @@ yarn add squad-ts
 # or
 pnpm add squad-ts
 ```
+
+---
 
 ## Quick Start
 
@@ -37,6 +69,8 @@ console.log(payment.data.checkout_url);
 // → https://checkout.squadco.com/pay/...
 ```
 
+---
+
 ## Configuration
 
 | Option | Type | Required | Default | Description |
@@ -45,8 +79,10 @@ console.log(payment.data.checkout_url);
 | `environment` | `'sandbox' \| 'live'` | No | `'live'` | API environment |
 | `timeout` | `number` | No | `30000` | Request timeout in milliseconds |
 
-**Sandbox base URL:** `https://sandbox-api-d.squadco.com`  
-**Live base URL:** `https://api-d.squadco.com`
+| Environment | Base URL |
+|-------------|----------|
+| `sandbox` | `https://sandbox-api-d.squadco.com` |
+| `live` | `https://api-d.squadco.com` |
 
 ---
 
@@ -56,7 +92,7 @@ console.log(payment.data.checkout_url);
 
 #### `initiate(payload)`
 
-Initiates a payment and returns a checkout URL.
+Initiates a payment and returns a checkout URL to redirect or embed.
 
 ```typescript
 const response = await squad.payments.initiate({
@@ -76,7 +112,7 @@ const response = await squad.payments.initiate({
 
 #### `verify(transactionRef)`
 
-Verifies a transaction by reference.
+Verifies a transaction by reference. This is a read-only status check — it does not trigger any payment processing or notifications.
 
 ```typescript
 const result = await squad.payments.verify("TXN_001");
@@ -87,22 +123,25 @@ console.log(result.data.transaction_amount); // amount in kobo
 
 #### `getTransaction(transactionRef)`
 
-Convenience method — returns `data` directly (unwrapped).
+Convenience wrapper around `verify` — returns `data` directly (unwrapped from the envelope).
 
 ```typescript
 const txn = await squad.payments.getTransaction("TXN_001");
 console.log(txn.email);
+console.log(txn.transaction_status);
 ```
 
-#### `getAllTransactions(params?)`
+#### `getAllTransactions(params)`
 
-Get all transactions with optional filters.
+Get all transactions with filters. Date range is required and must be within one month.
 
 ```typescript
 const result = await squad.payments.getAllTransactions({
   page: 1,
   perPage: 20,
-  dir: "DESC",
+  currency: "NGN",
+  start_date: "2026-05-01",
+  end_date: "2026-05-31",
 });
 
 result.data.rows.forEach((txn) => console.log(txn.transaction_ref));
@@ -110,7 +149,7 @@ result.data.rows.forEach((txn) => console.log(txn.transaction_ref));
 
 #### `charge(payload)` — Direct API
 
-Charge a card/bank/USSD directly without the hosted checkout.
+Charge a card directly without the hosted checkout page.
 
 ```typescript
 const result = await squad.payments.charge({
@@ -132,6 +171,8 @@ const result = await squad.payments.charge({
 
 #### `authorize(payload)` — Direct API PIN/OTP
 
+Submit a PIN or OTP to complete a direct charge flow.
+
 ```typescript
 await squad.payments.authorize({
   transaction_reference: "DIRECT_001",
@@ -143,13 +184,17 @@ await squad.payments.authorize({
 
 Verify a POS/SoftPOS transaction.
 
+```typescript
+const result = await squad.payments.verifyPos("POS_TXN_001");
+```
+
 ---
 
 ### `squad.transfers`
 
 #### `accountLookup(payload)`
 
-Resolve account holder name before initiating a transfer.
+Resolve an account holder's name before sending a transfer. Always do this first and use the returned name in `initiateTransfer`.
 
 ```typescript
 const result = await squad.transfers.accountLookup({
@@ -162,15 +207,17 @@ console.log(result.data.account_name); // 'JOHN DOE'
 
 #### `initiateTransfer(payload)`
 
-Send money to a bank account. **Always prepend your merchant ID to the transaction reference.**
+Send money to a bank account.
+
+> **Important:** The `transaction_reference` must be prefixed with your merchant ID (e.g. `"MERCHANTID_uniqueref"`). If you receive a `424` timeout error, call `requery()` with the same reference before retrying — never reuse a timed-out reference with a new one.
 
 ```typescript
 const result = await squad.transfers.initiateTransfer({
-  transaction_reference: "MERCHANTID_TRF001", // must include your merchant ID prefix
+  transaction_reference: "MERCHANTID_TRF001",
   amount: "100000",     // in kobo
   bank_code: "058",
   account_number: "0123456789",
-  account_name: "JOHN DOE", // from accountLookup
+  account_name: "JOHN DOE", // use the result from accountLookup
   currency_id: "NGN",
   remark: "Payment for services",
 });
@@ -178,11 +225,9 @@ const result = await squad.transfers.initiateTransfer({
 console.log(result.data.nip_transaction_reference);
 ```
 
-> **Important:** If you receive error code `424` (timeout), call `requery()` with the same reference before retrying. Never reuse a timed-out reference.
-
 #### `requery(payload)`
 
-Re-query a transfer status.
+Re-query the status of a transfer. Use this after a `424` timeout before deciding to retry.
 
 ```typescript
 const status = await squad.transfers.requery({
@@ -202,7 +247,7 @@ const transfers = await squad.transfers.getAllTransfers({
 
 #### `getBanks()`
 
-Get the list of supported banks.
+Get the list of all supported banks and their codes.
 
 ```typescript
 const { data } = await squad.transfers.getBanks();
@@ -215,7 +260,7 @@ data.forEach((bank) => console.log(bank.bank_code, bank.bank_name));
 
 #### `create(payload)`
 
-Create a customer virtual account (fly-through account tied to GTBank).
+Create a static virtual account for a customer (tied to GTBank).
 
 ```typescript
 const account = await squad.virtualAccounts.create({
@@ -223,10 +268,10 @@ const account = await squad.virtualAccounts.create({
   last_name: "Doe",
   middle_name: "Paul",
   mobile_num: "08012345678",
-  dob: "01/01/1990",           // mm/dd/yyyy
+  dob: "01/01/1990",              // mm/dd/yyyy
   email: "john@example.com",
   bvn: "22222222222",
-  gender: "1",                  // '1' = Male, '2' = Female
+  gender: "1",                    // '1' = Male, '2' = Female
   address: "1 Test Street, Lagos",
   customer_identifier: "CUST_001", // your unique customer ID
   beneficiary_account: "0123456789", // 10-digit GTBank account
@@ -236,6 +281,8 @@ console.log(account.data.virtual_account_number);
 ```
 
 #### `createBusiness(payload)`
+
+Create a static virtual account for a business.
 
 ```typescript
 const bizAccount = await squad.virtualAccounts.createBusiness({
@@ -249,13 +296,15 @@ const bizAccount = await squad.virtualAccounts.createBusiness({
 
 #### `getCustomerTransactions(customer_identifier)`
 
+Get all incoming transactions for a specific customer.
+
 ```typescript
 const txns = await squad.virtualAccounts.getCustomerTransactions("CUST_001");
 ```
 
 #### `getMerchantTransactions()`
 
-Get all incoming transactions across your merchant account.
+Get all incoming virtual account transactions across your merchant profile.
 
 #### `getMerchantTransactionsFiltered(params)`
 
@@ -279,7 +328,7 @@ const customer = await squad.virtualAccounts.getCustomerByVirtualAccount("783492
 
 #### `getCustomerByIdentifier(customer_identifier)`
 
-Retrieve a customer's details using the identifier you assigned when creating their virtual account.
+Retrieve a customer's details using the identifier you assigned when creating their account.
 
 ```typescript
 const customer = await squad.virtualAccounts.getCustomerByIdentifier("CUST001");
@@ -287,7 +336,7 @@ const customer = await squad.virtualAccounts.getCustomerByIdentifier("CUST001");
 
 #### `getMerchantAccounts(params?)`
 
-List all virtual accounts created under your merchant profile, with optional pagination.
+List all virtual accounts created under your merchant profile.
 
 ```typescript
 const accounts = await squad.virtualAccounts.getMerchantAccounts({ page: 1, perPage: 10 });
@@ -297,6 +346,8 @@ console.log(accounts.data.rows);
 
 #### `simulatePayment(payload)` — sandbox only
 
+Simulate an incoming payment to a virtual account for testing.
+
 ```typescript
 await squad.virtualAccounts.simulatePayment({
   virtual_account_number: "7834927713",
@@ -305,6 +356,8 @@ await squad.virtualAccounts.simulatePayment({
 ```
 
 #### `initiateDynamic(payload)` — Dynamic Virtual Accounts
+
+Create a one-time virtual account that expires after a set duration or once the expected amount is received.
 
 ```typescript
 const dva = await squad.virtualAccounts.initiateDynamic({
@@ -319,6 +372,8 @@ console.log(dva.data.expires_at);
 ```
 
 #### `updateDynamic(payload)`
+
+Update the amount or duration of an existing dynamic virtual account.
 
 ```typescript
 await squad.virtualAccounts.updateDynamic({
@@ -340,6 +395,8 @@ const txns = await squad.virtualAccounts.getDynamicTransactions("DVA_001");
 ### `squad.recurring`
 
 #### `createSubscriptionPlan(payload)`
+
+Create a recurring billing plan.
 
 ```typescript
 const plan = await squad.recurring.createSubscriptionPlan({
@@ -364,7 +421,7 @@ await squad.recurring.updateSubscriptionPlan({
 
 #### `getAllSubscriptionPlans()`
 
-Retrieve all subscription plans created under your merchant account.
+Retrieve all subscription plans under your merchant account.
 
 ```typescript
 const plans = await squad.recurring.getAllSubscriptionPlans();
@@ -382,7 +439,7 @@ console.log(plan.data.name);
 
 #### `customerSubscription(payload)`
 
-Subscribe a customer (requires a tokenized card `token_id`).
+Subscribe a customer to a plan. Requires a tokenized card `token_id` obtained from a prior payment.
 
 ```typescript
 await squad.recurring.customerSubscription({
@@ -404,7 +461,7 @@ await squad.recurring.cancelSubscription({
 
 #### `getAllSubscriptions()`
 
-Retrieve all active and inactive subscriptions under your merchant account.
+Retrieve all subscriptions (active and cancelled) under your merchant account.
 
 ```typescript
 const subscriptions = await squad.recurring.getAllSubscriptions();
@@ -413,7 +470,7 @@ console.log(subscriptions.data); // array of subscriptions
 
 #### `getSubscription(subscription_code)`
 
-Retrieve a single subscription by its subscription code.
+Retrieve a single subscription by its code.
 
 ```typescript
 const subscription = await squad.recurring.getSubscription("SUB_001");
@@ -426,13 +483,15 @@ console.log(subscription.data.status); // "active" | "cancelled"
 
 #### `initiate(payload)`
 
+Initiate a full or partial refund on a completed transaction.
+
 ```typescript
 const refund = await squad.refunds.initiate({
-  gateway_transaction_ref: "GW_REF_001", // from webhook
+  gateway_transaction_ref: "GW_REF_001", // from webhook payload
   transaction_ref: "TXN_REF_001",
   refund_type: "Full",                   // 'Full' | 'Partial'
   reason_for_refund: "Customer request",
-  // refund_amount: "5000",              // required for Partial (in kobo)
+  // refund_amount: "5000",              // required only for Partial (in kobo)
 });
 
 console.log(refund.data.refund_reference);
@@ -459,20 +518,24 @@ await squad.refunds.update({
 
 #### `getAll()`
 
+Retrieve all disputes raised against your transactions.
+
 ```typescript
 const disputes = await squad.disputes.getAll();
 ```
 
 #### `getUploadUrl(ticket_id, file_name)`
 
-Get a pre-signed URL to upload evidence for a rejected dispute.
+Get a pre-signed S3 URL to upload evidence when rejecting a dispute.
 
 ```typescript
 const { data } = await squad.disputes.getUploadUrl("TICKET_001", "evidence.pdf");
-// Upload your file to data.upload_url
+// Upload your file to data.upload_url, then call resolve()
 ```
 
 #### `resolve(ticket_id, payload)`
+
+Accept or reject a dispute.
 
 ```typescript
 await squad.disputes.resolve("TICKET_001", {
@@ -490,7 +553,7 @@ await squad.disputes.resolve("TICKET_001", {
 ```typescript
 const result = await squad.vas.purchaseAirtime({
   phone_number: "08012345678",
-  amount: 100, // Naira (minimum 50)
+  amount: 100, // Naira (minimum ₦50)
 });
 ```
 
@@ -499,7 +562,7 @@ const result = await squad.vas.purchaseAirtime({
 ```typescript
 await squad.vas.purchaseData({
   phone_number: "08012345678",
-  plan_code: "1001", // from getDataBundles
+  plan_code: "1001", // from getDataBundles()
   amount: 1000,
 });
 ```
@@ -515,6 +578,10 @@ const bundles = await squad.vas.getDataBundles("MTN");
 
 Returns the list of supported networks: `MTN | GLO | AIRTEL | 9MOBILE`.
 
+```typescript
+const { networks } = await squad.vas.getMobileNetworks();
+```
+
 #### `getTransactions(params)`
 
 ```typescript
@@ -527,11 +594,13 @@ await squad.vas.getTransactions({ page: 1, perPage: 20, action: "debit" });
 
 #### `create(payload)`
 
+Create a shareable payment link.
+
 ```typescript
 const link = await squad.paymentLinks.create({
   name: "Pay for invoice #123",
   description: "Payment for consulting services",
-  amount: 150000, // optional — leave out for open amount
+  amount: 150000, // optional — omit for open-amount links
   redirect_link: "https://yourapp.com/success",
   support_email: "billing@yourapp.com",
 });
@@ -547,7 +616,7 @@ await squad.paymentLinks.update("LINK_001", { amount: 200000 });
 
 #### `getAll()`
 
-Retrieve all payment links created under your merchant account.
+Retrieve all payment links under your merchant account.
 
 ```typescript
 const links = await squad.paymentLinks.getAll();
@@ -565,15 +634,19 @@ console.log(link.data.hash); // the link slug
 
 #### `toggleStatus(id)`
 
-Enable/disable a payment link.
+Enable or disable a payment link.
+
+```typescript
+await squad.paymentLinks.toggleStatus("LINK_001");
+```
 
 ---
 
 ### `squad.webhooks`
 
-#### Verifying Webhook Signatures
+#### Verifying Checkout Webhook Signatures
 
-Squad sends an `x-squad-encrypted-body` header with every webhook. Always validate it before processing.
+Squad sends an `x-squad-encrypted-body` header with every webhook. Always validate it before processing. Use `validateWebhook` if you manage the secret key yourself, or `validateCheckoutWebhook` to use the key already configured on the client instance.
 
 ```typescript
 // Express example
@@ -591,37 +664,38 @@ app.post("/webhook/squad", express.raw({ type: "application/json" }), (req, res)
 
   const event = squad.webhooks.parseEvent(JSON.parse(req.body as unknown as string));
 
-  // ⚠️ Always check your DB to avoid processing the same transaction twice
+  // Always check your DB first to avoid processing the same transaction twice
   if (event.Event === "charge_successful") {
     const { transaction_ref, amount, email } = event.Body;
     // Fulfill order, credit wallet, etc.
   }
 
-  // Acknowledge immediately
+  // Respond immediately with an acknowledgment
   const ack = squad.webhooks.buildAcknowledgment(event.TransactionRef, 200);
   res.json(ack);
 });
 ```
 
-#### Virtual Account Webhook Validation (v2/v3)
+#### Virtual Account Webhook Validation
 
 ```typescript
 const isValid = squad.webhooks.validateVirtualAccountWebhook(
-  payload,          // the parsed webhook body
-  signature,        // x-squad-signature header
+  payload,           // parsed webhook body
+  signature,         // x-squad-signature header
   "your_secret_key",
 );
 ```
 
-For **v1** webhooks, the entire body is hashed.  
-For **v2/v3** webhooks, only these 6 pipe-delimited fields are hashed:
-```
-transaction_reference|virtual_account_number|currency|principal_amount|settled_amount|customer_identifier
-```
+Squad uses two hashing schemes depending on the webhook version:
+
+| Version | Hash input |
+|---------|-----------|
+| v1 | Entire JSON body |
+| v2/v3 | `transaction_reference\|virtual_account_number\|currency\|principal_amount\|settled_amount\|customer_identifier` |
 
 #### `buildAcknowledgment(transaction_reference, status?)`
 
-Build the required response format:
+Build the required response Squad expects after receiving a webhook.
 
 ```typescript
 res.json(squad.webhooks.buildAcknowledgment("TXN_001", 200));
@@ -641,29 +715,29 @@ try {
   await squad.payments.verify("INVALID_REF");
 } catch (err) {
   if (err instanceof SquadError) {
-    console.error(err.message);     // Human-readable message
-    console.error(err.statusCode);  // HTTP status code (400, 401, 403, etc.)
-    console.error(err.data);        // Raw Squad API error response
+    console.error(err.message);     // human-readable message from Squad
+    console.error(err.statusCode);  // HTTP status code
+    console.error(err.data);        // raw Squad API error body
   }
 }
 ```
 
-### Error Types
+### Error Reference
 
 | Scenario | `statusCode` | Example `message` |
 |----------|-------------|-------------------|
-| Invalid transaction ref | `400` | `"Invalid transaction reference"` |
-| Missing/bad API key | `401` | `"Unauthorized"` |
+| Invalid request payload | `400` | `"Invalid transaction reference"` |
+| Missing or bad API key | `401` | `"Unauthorized"` |
 | Wrong environment key | `403` | `"API key is invalid. Key must start with sandbox_sk_"` |
-| Transfer timeout | `424` | `"Transaction timed out"` |
-| Network error | `0` | `"Network error — check your connection"` |
 | Request timeout | `408` | `"Request timed out"` |
+| Transfer timeout | `424` | `"Transaction timed out"` |
+| Network failure | `0` | `"Network error — check your connection"` |
 
 ---
 
 ## TypeScript Usage
 
-All types are exported and can be imported directly:
+All request/response types are exported and can be imported directly:
 
 ```typescript
 import type {
@@ -678,11 +752,10 @@ import type {
   SubscriptionPlan,
   DataBundle,
   MobileNetwork,
-  SquadError,
 } from "squad-ts";
 ```
 
-### Typed Webhook Handler
+### Typed Webhook Handlers
 
 ```typescript
 import type { WebhookEvent, VirtualAccountWebhookPayload } from "squad-ts";
@@ -703,14 +776,14 @@ function handleVirtualAccountWebhook(payload: VirtualAccountWebhookPayload) {
 
 ## Environment Variables
 
-Copy `.env.example` to `.env`:
+Copy `.env.example` to `.env` and fill in your keys:
 
 ```env
 SQUAD_SECRET_KEY=sandbox_sk_your_key_here
 SQUAD_ENVIRONMENT=sandbox
 ```
 
-Then load it:
+Then load with `dotenv`:
 
 ```typescript
 import { Squad } from "squad-ts";
@@ -724,46 +797,102 @@ const squad = new Squad({
 
 ---
 
+## Key Business Rules
+
+1. **Transfer references** must be prefixed with your merchant ID — e.g. `"MERCHANTID_uniqueref"`. Squad uses this to namespace your transactions.
+2. **424 on transfers** — always call `requery()` before retrying. The transfer may have succeeded despite the timeout. Never retry with the same reference without checking first.
+3. **Account lookup before transfer** — always call `accountLookup()` first and pass its `account_name` result into `initiateTransfer`. Squad validates the name.
+4. **Idempotent webhook handling** — store processed `transaction_ref` values and check before fulfilling orders. Webhooks can be delivered more than once.
+5. **BVN validation on virtual accounts** — name, DOB, gender, and phone must exactly match the BVN record. Mismatches will be rejected.
+6. **getAllTransactions date range** — `start_date` and `end_date` are required and the gap must not exceed one month.
+
+---
+
 ## Webhook IP Allowlist
 
-Squad sends webhooks from:
+Squad sends webhooks exclusively from:
 
 ```
 18.133.63.109
 ```
 
-Configure your firewall or reverse proxy to accept requests from this IP on your webhook endpoint.
-
----
-
-## Key Business Rules
-
-1. **Transfer references** must be prefixed with your merchant ID, e.g. `"SBABCKDY_uniqueref"`.
-2. **Error 424 on transfers** — always `requery()` before retrying. Never retry with the same reference.
-3. **Account lookup before transfer** — always call `accountLookup()` first and use its `account_name` result.
-4. **Idempotency on webhooks** — store and check `transaction_ref` before fulfilling orders to avoid double-crediting.
-5. **BVN validation** on virtual accounts is strict — name, DOB, gender, and phone must match exactly.
+Configure your firewall or server to accept inbound requests from this IP on your webhook endpoint path.
 
 ---
 
 ## Contributing
 
+Contributions are welcome. This section covers everything you need to get from zero to a merged PR.
+
+### Getting Started
+
 ```bash
-git clone https://github.com/yourusername/squad-ts.git
+git clone https://github.com/PADARLabs/squad-ts.git
 cd squad-ts
 npm install
-
-npm test           # run tests
-npm run build      # build dist/
-npm run lint       # ESLint
-npm run format     # Prettier
-npm run typecheck  # tsc --noEmit
 ```
 
-Please open an issue or PR for any missing endpoints or type corrections.
+Copy the example env file and add your sandbox credentials:
+
+```bash
+cp .env.example .env
+# Edit .env and set SQUAD_SECRET_KEY=sandbox_sk_...
+```
+
+### Development Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm test` | Run the full test suite |
+| `npm run test:coverage` | Run tests with coverage report |
+| `npm run build` | Compile to `dist/` (ESM + CJS + types) |
+| `npm run typecheck` | Type-check without emitting |
+| `npm run lint` | Run ESLint |
+| `npm run lint:fix` | Auto-fix lint issues |
+| `npm run format` | Format with Prettier |
+
+### Project Structure
+
+```
+src/
+  client.ts        # Base HTTP client (fetch-based)
+  errors.ts        # SquadError class
+  index.ts         # Public exports
+  resources/       # One file per API resource
+  types/           # TypeScript interfaces for all payloads and responses
+tests/
+  *.test.ts        # Jest tests per resource (fetch is mocked via jest.spyOn)
+```
+
+### How to Add a New Endpoint
+
+1. Add the request/response types to the relevant file in `src/types/`
+2. Add the method to the resource class in `src/resources/`
+3. Export any new types from `src/types/index.ts`
+4. Add a test in `tests/` using `mockFetch()` from `tests/helpers.ts`
+5. Add usage docs to `README.md`
+
+### Pull Request Guidelines
+
+- **One PR per feature or fix** — keep changes focused
+- **Tests are required** — all new methods need at least a success case and an error case
+- **No new dependencies** — the SDK is intentionally zero-dependency; raise an issue first if you think one is needed
+- **Match existing code style** — Prettier and ESLint configs are included; run `npm run format && npm run lint:fix` before pushing
+- **Update the README** — if you add or change a method, update the API Reference section
+
+### Reporting Issues
+
+Please [open an issue](https://github.com/PADARLabs/squad-ts/issues) for:
+- Missing or undocumented API endpoints
+- Type errors or incorrect response shapes
+- Bugs or unexpected behaviour
+
+Include the Squad API endpoint, the SDK method you called, and the error or unexpected response you received.
 
 ---
 
 ## License
 
-MIT
+MIT © [PADARLabs](https://www.padarlabs.com)
+
+See [LICENSE](LICENSE) for the full text.
