@@ -1,5 +1,5 @@
 {
-  "name": "squad-ts",
+  "name": "@padar-labs/squad-ts",
   "version": "1.0.0",
   "description": "TypeScript SDK for the Squad payment gateway (squadco.com)",
   "keywords": [
@@ -44,9 +44,6 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build && npm test"
-  },
-  "dependencies": {
-    "squad-ts": "file:squad-ts-1.0.0.tgz"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

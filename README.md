@@ -1,8 +1,8 @@
-# squad-ts
+# @padar-labs/squad-ts
 
 A comprehensive TypeScript SDK for the [Squad payment gateway](https://squadco.com) — fully typed, zero dependencies, dual ESM/CJS, and covering every documented API endpoint.
 
-[![npm version](https://img.shields.io/npm/v/squad-ts)](https://www.npmjs.com/package/squad-ts)
+[![npm version](https://img.shields.io/npm/v/@padar-labs/squad-ts)](https://www.npmjs.com/package/@padar-labs/squad-ts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
@@ -35,11 +35,11 @@ A comprehensive TypeScript SDK for the [Squad payment gateway](https://squadco.c
 ## Installation
 
 ```bash
-npm install squad-ts
+npm install @padar-labs/squad-ts
 # or
-yarn add squad-ts
+yarn add @padar-labs/squad-ts
 # or
-pnpm add squad-ts
+pnpm add @padar-labs/squad-ts
 ```
 
 ---
@@ -47,7 +47,7 @@ pnpm add squad-ts
 ## Quick Start
 
 ```typescript
-import { Squad } from "squad-ts";
+import { Squad } from "@padar-labs/squad-ts";
 
 const squad = new Squad({
   secretKey: "sandbox_sk_your_key_here",
@@ -709,7 +709,7 @@ res.json(squad.webhooks.buildAcknowledgment("TXN_001", 200));
 All API errors throw a `SquadError`, which extends the native `Error` class.
 
 ```typescript
-import { Squad, SquadError } from "squad-ts";
+import { Squad, SquadError } from "@padar-labs/squad-ts";
 
 try {
   await squad.payments.verify("INVALID_REF");
@@ -752,13 +752,13 @@ import type {
   SubscriptionPlan,
   DataBundle,
   MobileNetwork,
-} from "squad-ts";
+} from "@padar-labs/squad-ts";
 ```
 
 ### Typed Webhook Handlers
 
 ```typescript
-import type { WebhookEvent, VirtualAccountWebhookPayload } from "squad-ts";
+import type { WebhookEvent, VirtualAccountWebhookPayload } from "@padar-labs/squad-ts";
 
 function handleCheckoutWebhook(event: WebhookEvent) {
   if (event.Event === "charge_successful") {
@@ -786,7 +786,7 @@ SQUAD_ENVIRONMENT=sandbox
 Then load with `dotenv`:
 
 ```typescript
-import { Squad } from "squad-ts";
+import { Squad } from "@padar-labs/squad-ts";
 import "dotenv/config";
 
 const squad = new Squad({
@@ -827,8 +827,8 @@ Contributions are welcome. This section covers everything you need to get from z
 ### Getting Started
 
 ```bash
-git clone https://github.com/PADARLabs/squad-ts.git
-cd squad-ts
+git clone https://github.com/PADARLabs/@padar-labs/squad-ts.git
+cd @padar-labs/squad-ts
 npm install
 ```
 
@@ -882,7 +882,7 @@ tests/
 
 ### Reporting Issues
 
-Please [open an issue](https://github.com/PADARLabs/squad-ts/issues) for:
+Please [open an issue](https://github.com/PADARLabs/@padar-labs/squad-ts/issues) for:
 - Missing or undocumented API endpoints
 - Type errors or incorrect response shapes
 - Bugs or unexpected behaviour
