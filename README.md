@@ -271,9 +271,29 @@ const result = await squad.virtualAccounts.getMerchantTransactionsFiltered({
 
 #### `getCustomerByVirtualAccount(virtual_account_number)`
 
+Retrieve a customer's details using their virtual account number.
+
+```typescript
+const customer = await squad.virtualAccounts.getCustomerByVirtualAccount("7834927713");
+```
+
 #### `getCustomerByIdentifier(customer_identifier)`
 
+Retrieve a customer's details using the identifier you assigned when creating their virtual account.
+
+```typescript
+const customer = await squad.virtualAccounts.getCustomerByIdentifier("CUST001");
+```
+
 #### `getMerchantAccounts(params?)`
+
+List all virtual accounts created under your merchant profile, with optional pagination.
+
+```typescript
+const accounts = await squad.virtualAccounts.getMerchantAccounts({ page: 1, perPage: 10 });
+console.log(accounts.data.count);
+console.log(accounts.data.rows);
+```
 
 #### `simulatePayment(payload)` — sandbox only
 
@@ -344,7 +364,21 @@ await squad.recurring.updateSubscriptionPlan({
 
 #### `getAllSubscriptionPlans()`
 
+Retrieve all subscription plans created under your merchant account.
+
+```typescript
+const plans = await squad.recurring.getAllSubscriptionPlans();
+console.log(plans.data); // array of plans
+```
+
 #### `getSubscriptionPlan(plan_code)`
+
+Retrieve a single subscription plan by its plan code.
+
+```typescript
+const plan = await squad.recurring.getSubscriptionPlan("PLAN_001");
+console.log(plan.data.name);
+```
 
 #### `customerSubscription(payload)`
 
@@ -370,7 +404,21 @@ await squad.recurring.cancelSubscription({
 
 #### `getAllSubscriptions()`
 
+Retrieve all active and inactive subscriptions under your merchant account.
+
+```typescript
+const subscriptions = await squad.recurring.getAllSubscriptions();
+console.log(subscriptions.data); // array of subscriptions
+```
+
 #### `getSubscription(subscription_code)`
+
+Retrieve a single subscription by its subscription code.
+
+```typescript
+const subscription = await squad.recurring.getSubscription("SUB_001");
+console.log(subscription.data.status); // "active" | "cancelled"
+```
 
 ---
 
@@ -499,7 +547,21 @@ await squad.paymentLinks.update("LINK_001", { amount: 200000 });
 
 #### `getAll()`
 
+Retrieve all payment links created under your merchant account.
+
+```typescript
+const links = await squad.paymentLinks.getAll();
+console.log(links.data); // array of payment links
+```
+
 #### `getOne(id)`
+
+Retrieve a single payment link by its ID.
+
+```typescript
+const link = await squad.paymentLinks.getOne("LINK_001");
+console.log(link.data.hash); // the link slug
+```
 
 #### `toggleStatus(id)`
 
