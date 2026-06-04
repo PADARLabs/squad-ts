@@ -13,7 +13,7 @@
     "transfers",
     "virtual-accounts"
   ],
-  "author": "Paul Aderoju",
+  "author": "Paul Aderoju <paul.aderoju@padarlabs.com> (https://www.padarlabs.com)",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
